@@ -1,0 +1,90 @@
+#rh-profit-helper-root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 320px;
+  z-index: 999999;
+  font-family: Arial, sans-serif;
+}
+
+.rhph-card {
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.rhph-header {
+  padding: 12px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+}
+
+.rhph-body {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rhph-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.rhph-label {
+  color: #666;
+}
+
+.rhph-value {
+  font-weight: 600;
+  text-align: right;
+}
+
+.rhph-muted {
+  color: #777;
+  font-size: 12px;
+}
+
+.rhph-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rhph-btn {
+  padding: 7px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.rhph-mini-checkbox {
+  margin-right: 8px !important;
+  width: 14px !important;
+  height: 14px !important;
+  vertical-align: middle !important;
+  accent-color: #111 !important;
+}
+
+.rhph-badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: #f3f3f3;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.rhph-success {
+  color: #0a7a32;
+}
+
+.rhph-danger {
+  color: #b42318;
+}

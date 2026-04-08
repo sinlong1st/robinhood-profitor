@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Robinhood Profit Helper",
+  "version": "0.1.0",
+  "description": "MVP helper that estimates profit if sold now and lets you include/exclude rows on Robinhood pages.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://robinhood.com/*", "https://*.robinhood.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Robinhood Profit Helper"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://robinhood.com/*", "https://*.robinhood.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
