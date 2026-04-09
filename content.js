@@ -101,7 +101,7 @@
     // Price, Average cost, Total return, Equity
     let totalReturn = NaN;
     if (moneyValues.length >= 4) {
-      totalReturn = moneyValues[2];
+      totalReturn = moneyValues[3];
     }
 
     // Negative rows show a down arrow in the HTML.
