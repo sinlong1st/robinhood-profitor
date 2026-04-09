@@ -17,8 +17,13 @@ saveBtn.addEventListener("click", async () => {
   const taxRatePercent = Number(taxRateEl.value || 0);
   const slippagePerTrade = Number(slippageEl.value || 0);
 
-  await chrome.storage.local.set({ taxRatePercent, slippagePerTrade });
+  await chrome.storage.local.set({
+    taxRatePercent,
+    slippagePerTrade
+  });
+
   statusEl.textContent = "Saved.";
+
   setTimeout(() => {
     statusEl.textContent = "";
   }, 1200);

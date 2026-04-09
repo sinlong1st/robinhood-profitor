@@ -1,0 +1,99 @@
+#rh-profit-helper-root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 320px;
+  z-index: 999999;
+  font-family: Arial, sans-serif;
+  pointer-events: auto;
+}
+
+.rhph-card {
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  will-change: transform;
+}
+
+.rhph-header {
+  padding: 12px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+}
+
+.rhph-body {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rhph-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.rhph-label {
+  color: #666;
+}
+
+.rhph-value {
+  font-weight: 600;
+  text-align: right;
+}
+
+.rhph-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rhph-btn {
+  padding: 7px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.rhph-success {
+  color: #0a7a32;
+}
+
+.rhph-danger {
+  color: #b42318;
+}
+
+.rhph-checkbox-wrap {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.rhph-mini-checkbox {
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+a[href^="/stocks/"] {
+  position: relative;
+}
+
+a[href^="/stocks/"] > div {
+  padding-left: 28px;
+}

@@ -5,6 +5,7 @@
   width: 320px;
   z-index: 999999;
   font-family: Arial, sans-serif;
+  pointer-events: auto;
 }
 
 .rhph-card {
@@ -13,6 +14,7 @@
   border-radius: 14px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
   overflow: hidden;
+  will-change: transform;
 }
 
 .rhph-header {
@@ -45,11 +47,6 @@
   text-align: right;
 }
 
-.rhph-muted {
-  color: #777;
-  font-size: 12px;
-}
-
 .rhph-actions {
   display: flex;
   gap: 8px;
@@ -64,23 +61,6 @@
   background: #fff;
 }
 
-.rhph-mini-checkbox {
-  margin-right: 8px !important;
-  width: 14px !important;
-  height: 14px !important;
-  vertical-align: middle !important;
-  accent-color: #111 !important;
-}
-
-.rhph-badge {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 4px 8px;
-  background: #f3f3f3;
-  border-radius: 999px;
-  font-size: 11px;
-}
-
 .rhph-success {
   color: #0a7a32;
 }
@@ -88,7 +68,6 @@
 .rhph-danger {
   color: #b42318;
 }
-
 
 .rhph-checkbox-wrap {
   position: absolute;
