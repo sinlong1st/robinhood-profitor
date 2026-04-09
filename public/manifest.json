@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Robinhood Profit Helper",
+  "version": "0.2.0",
+  "permissions": ["storage"],
+  "host_permissions": ["https://robinhood.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://robinhood.com/account/investing*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

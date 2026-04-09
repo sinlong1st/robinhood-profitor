@@ -1,64 +1,75 @@
-# Robinhood Profit Helper (MVP)
+# React + TypeScript + Vite
 
-This is a starter Chrome extension for Robinhood pages.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## What it does
+Currently, two official plugins are available:
 
-### 1) Position-detail page
-Tries to estimate:
-- shares
-- average cost
-- current price
-- gross proceeds
-- gross P/L
-- adjusted P/L if sold now
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-### 2) List / portfolio page
-Tries to:
-- detect visible holding rows
-- add a checkbox to each row
-- include/exclude rows from a total estimate
+## React Compiler
 
-## Important note
+The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
 
-This is **heuristic-based**.
-Robinhood's page structure can change, so you may need to refine selectors and parsing logic inside `content.js`.
+Note: This will impact Vite dev & build performances.
 
-## How to load it
+## Expanding the ESLint configuration
 
-1. Open `chrome://extensions`
-2. Turn on **Developer mode**
-3. Click **Load unpacked**
-4. Select this folder
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-## Where to customize next
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-### Better row detection
-Edit:
-- `looksLikeHoldingRow`
-- `findCandidateRows`
-- `estimateRowPnl`
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-### Better detail-page extraction
-Edit:
-- `inferPositionDetail`
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
 
-### Add today's profit mode
-You can add:
-- today's change * shares
-- compare against previous close if present on page
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-### Add export or notes
-Use:
-- `chrome.storage.local`
-- CSV generation in the content script or popup
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-## Suggested next steps
-
-1. Lock onto your exact Robinhood DOM by inspecting one page you use most.
-2. Replace the broad heuristics with stable selectors.
-3. Add a setting for:
-   - include/exclude all
-   - save profiles
-   - show only selected tickers
-4. Add a compact table in the floating panel with each checked ticker and its estimated P/L.
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
