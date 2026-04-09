@@ -1,6 +1,8 @@
 (() => {
   const ROOT_ID = "rh-profit-helper-root";
-  const STORAGE_KEY_INCLUDE_MAP = "includeMap";
+  const STORAGE_KEY = "includeMap";
+
+  if (!location.pathname.startsWith("/account/investing")) return;
 
   function money(n) {
     if (!Number.isFinite(n)) return "—";
@@ -10,299 +12,366 @@
     }).format(n);
   }
 
-  function percent(n) {
-    if (!Number.isFinite(n)) return "—";
-    return `${n.toFixed(2)}%`;
-  }
-
   function parseMoney(text) {
     if (!text) return NaN;
-    const cleaned = text.replace(/,/g, "").match(/-?\$?\d+(\.\d+)?/g);
-    if (!cleaned || !cleaned.length) return NaN;
-    const raw = cleaned[0].replace("$", "");
-    return Number(raw);
+    const match = text.replace(/,/g, "").match(/-?\$?\d+(\.\d+)?/);
+    if (!match) return NaN;
+    return Number(match[0].replace("$", ""));
   }
 
-  function parseAllMoney(text) {
-    if (!text) return [];
-    const matches = text.replace(/,/g, "").match(/-?\$?\d+(\.\d+)?/g) || [];
-    return matches.map(v => Number(v.replace("$", ""))).filter(Number.isFinite);
+  function getRoot() {
+    return document.getElementById(ROOT_ID);
   }
 
-  function parseShares(text) {
-    if (!text) return NaN;
-    const patterns = [
-      /([\d,.]+)\s+shares?/i,
-      /quantity\s*[:\-]?\s*([\d,.]+)/i,
-      /position\s*[:\-]?\s*([\d,.]+)/i
-    ];
-    for (const p of patterns) {
-      const m = text.match(p);
-      if (m) return Number(m[1].replace(/,/g, ""));
-    }
-    return NaN;
-  }
+  function ensureRoot() {
+    let root = getRoot();
 
-  function getPageText() {
-    return document.body ? document.body.innerText || "" : "";
-  }
-
-  function inferPositionDetail() {
-    const text = getPageText();
-    const shares = parseShares(text);
-
-    let avgCost = NaN;
-    let currentPrice = NaN;
-
-    const avgCostMatch =
-      text.match(/average cost\s*[:\-]?\s*(\$?[\d,.]+(?:\.\d+)?)/i) ||
-      text.match(/avg(?:erage)?\s+cost\s*[:\-]?\s*(\$?[\d,.]+(?:\.\d+)?)/i);
-
-    if (avgCostMatch) {
-      avgCost = Number(avgCostMatch[1].replace(/\$/g, "").replace(/,/g, ""));
-    }
-
-    const priceCandidates = Array.from(document.querySelectorAll("h1, h2, h3, span, div"))
-      .map(el => (el.textContent || "").trim())
-      .filter(Boolean)
-      .flatMap(parseAllMoney)
-      .filter(n => n > 0);
-
-    if (priceCandidates.length) {
-      currentPrice = priceCandidates[0];
-    }
-
-    if (!Number.isFinite(currentPrice)) {
-      const textMonies = parseAllMoney(text).filter(n => n > 0);
-      currentPrice = textMonies.length ? textMonies[0] : NaN;
-    }
-
-    if (!Number.isFinite(shares) || !Number.isFinite(avgCost) || !Number.isFinite(currentPrice)) {
-      return null;
-    }
-
-    return { shares, avgCost, currentPrice };
-  }
-
-  function rowSignature(row) {
-    const txt = (row.innerText || "").replace(/\s+/g, " ").trim().slice(0, 180);
-    return `${location.pathname}::${txt}`;
-  }
-
-  function looksLikeHoldingRow(el) {
-    const txt = (el.innerText || "").replace(/\s+/g, " ").trim();
-    if (!txt) return false;
-
-    const moneyCount = parseAllMoney(txt).length;
-    const hasTickerish = /\b[A-Z]{1,5}\b/.test(txt);
-    const hasPercent = /-?\d+(\.\d+)?%/.test(txt);
-
-    return (hasTickerish && moneyCount >= 1) || (moneyCount >= 2 && hasPercent);
-  }
-
-  function findCandidateRows() {
-    const candidates = Array.from(document.querySelectorAll("a, div, li, tr"))
-      .filter(el => el.offsetParent !== null)
-      .filter(looksLikeHoldingRow);
-
-    const seen = new Set();
-    return candidates.filter(el => {
-      const sig = rowSignature(el);
-      if (seen.has(sig)) return false;
-      seen.add(sig);
-      return true;
-    }).slice(0, 200);
-  }
-
-  async function getSettings() {
-    const data = await chrome.storage.local.get({
-      taxRatePercent: 0,
-      slippagePerTrade: 0,
-      includeMap: {}
-    });
-    return data;
-  }
-
-  async function setInclude(signature, included) {
-    const data = await chrome.storage.local.get({ includeMap: {} });
-    data.includeMap[signature] = included;
-    await chrome.storage.local.set({ includeMap: data.includeMap });
-  }
-
-  function estimateRowPnl(row) {
-    const txt = (row.innerText || "").replace(/\s+/g, " ").trim();
-
-    const moneyValues = parseAllMoney(txt);
-    const percentMatch = txt.match(/(-?\d+(?:\.\d+)?)%/);
-    const tickerMatch = txt.match(/\b([A-Z]{1,5})\b/);
-
-    let pnl = NaN;
-
-    // Heuristic:
-    // If a row has at least 2 monetary values, often one of them is a return/P&L.
-    // Prefer the last non-trivial value as the row P&L estimate.
-    if (moneyValues.length >= 2) {
-      pnl = moneyValues[moneyValues.length - 1];
-    }
-
-    return {
-      ticker: tickerMatch ? tickerMatch[1] : "—",
-      estimatedPnl: pnl,
-      estimatedPercent: percentMatch ? Number(percentMatch[1]) : NaN
-    };
-  }
-
-  function computePositionSummary(position, settings) {
-    const grossProceeds = position.shares * position.currentPrice;
-    const grossPnl = (position.currentPrice - position.avgCost) * position.shares;
-
-    let estimatedTax = 0;
-    if (grossPnl > 0 && settings.taxRatePercent > 0) {
-      estimatedTax = grossPnl * (settings.taxRatePercent / 100);
-    }
-
-    const adjustedPnl = grossPnl - estimatedTax - (settings.slippagePerTrade || 0);
-    const pnlPct = position.avgCost > 0
-      ? ((position.currentPrice - position.avgCost) / position.avgCost) * 100
-      : NaN;
-
-    return {
-      grossProceeds,
-      grossPnl,
-      estimatedTax,
-      adjustedPnl,
-      pnlPct
-    };
-  }
-
-  async function computeListSummary(settings) {
-    const rows = findCandidateRows();
-    const includeMap = settings.includeMap || {};
-
-    const items = rows.map(row => {
-      const sig = rowSignature(row);
-      const included = includeMap[sig] !== false;
-      const info = estimateRowPnl(row);
-      return { row, sig, included, ...info };
-    });
-
-    const selected = items.filter(i => i.included);
-    const totalPnl = selected.reduce((sum, i) => sum + (Number.isFinite(i.estimatedPnl) ? i.estimatedPnl : 0), 0);
-
-    return {
-      itemCount: items.length,
-      selectedCount: selected.length,
-      totalPnl,
-      items
-    };
-  }
-
-  function removeRoot() {
-    const existing = document.getElementById(ROOT_ID);
-    if (existing) existing.remove();
-  }
-
-  function attachCheckboxes(items) {
-    items.forEach(item => {
-      if (item.row.querySelector(".rhph-mini-checkbox")) return;
-
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = item.included;
-      cb.className = "rhph-mini-checkbox";
-      cb.title = "Include/exclude from helper total";
-
-      cb.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await setInclude(item.sig, cb.checked);
-        render().catch(console.error);
-      });
-
-      const firstTextHost = Array.from(item.row.querySelectorAll("span, div, p, td"))
-        .find(el => (el.textContent || "").trim());
-
-      if (firstTextHost) {
-        firstTextHost.prepend(cb);
-      } else {
-        item.row.prepend(cb);
-      }
-    });
-  }
-
-  function createRoot(innerHtml) {
-    const root = document.createElement("div");
-    root.id = ROOT_ID;
-    root.innerHTML = innerHtml;
-    document.documentElement.appendChild(root);
-  }
-
-  async function render() {
-    removeRoot();
-    const settings = await getSettings();
-    const position = inferPositionDetail();
-
-    if (position) {
-      const summary = computePositionSummary(position, settings);
-      createRoot(`
+    if (!root) {
+      root = document.createElement("div");
+      root.id = ROOT_ID;
+      root.innerHTML = `
         <div class="rhph-card">
           <div class="rhph-header">Robinhood Profit Helper</div>
           <div class="rhph-body">
-            <div class="rhph-row"><span class="rhph-label">Shares</span><span class="rhph-value">${position.shares}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Avg cost</span><span class="rhph-value">${money(position.avgCost)}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Current price</span><span class="rhph-value">${money(position.currentPrice)}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Gross proceeds</span><span class="rhph-value">${money(summary.grossProceeds)}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Gross P/L</span><span class="rhph-value ${summary.grossPnl >= 0 ? "rhph-success" : "rhph-danger"}">${money(summary.grossPnl)}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Est. tax</span><span class="rhph-value">${money(summary.estimatedTax)}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Adj. P/L if sold now</span><span class="rhph-value ${summary.adjustedPnl >= 0 ? "rhph-success" : "rhph-danger"}">${money(summary.adjustedPnl)}</span></div>
-            <div class="rhph-row"><span class="rhph-label">Return %</span><span class="rhph-value">${percent(summary.pnlPct)}</span></div>
-            <div class="rhph-badge">MVP mode: current position page</div>
-            <div class="rhph-muted" style="margin-top:8px;">If any number looks wrong, tweak the selectors/heuristics in content.js.</div>
+            <div class="rhph-row">
+              <span class="rhph-label">Detected stocks</span>
+              <span class="rhph-value" id="rhph-detected">0</span>
+            </div>
+            <div class="rhph-row">
+              <span class="rhph-label">Included stocks</span>
+              <span class="rhph-value" id="rhph-included">0</span>
+            </div>
+            <div class="rhph-row">
+              <span class="rhph-label">Selected total return</span>
+              <span class="rhph-value" id="rhph-total">—</span>
+            </div>
+            <div class="rhph-actions">
+              <button class="rhph-btn" id="rhph-select-all" type="button">Select all</button>
+              <button class="rhph-btn" id="rhph-clear-all" type="button">Clear all</button>
+              <button class="rhph-btn" id="rhph-refresh" type="button">Refresh</button>
+            </div>
           </div>
         </div>
-      `);
-      return;
-    }
+      `;
 
-    const listSummary = await computeListSummary(settings);
-    attachCheckboxes(listSummary.items);
+      document.documentElement.appendChild(root);
 
-    createRoot(`
-      <div class="rhph-card">
-        <div class="rhph-header">Robinhood Profit Helper</div>
-        <div class="rhph-body">
-          <div class="rhph-row"><span class="rhph-label">Detected rows</span><span class="rhph-value">${listSummary.itemCount}</span></div>
-          <div class="rhph-row"><span class="rhph-label">Included rows</span><span class="rhph-value">${listSummary.selectedCount}</span></div>
-          <div class="rhph-row"><span class="rhph-label">Selected est. total P/L</span><span class="rhph-value ${listSummary.totalPnl >= 0 ? "rhph-success" : "rhph-danger"}">${money(listSummary.totalPnl)}</span></div>
-          <div class="rhph-badge">List mode: use the checkboxes next to each row</div>
-          <div class="rhph-muted" style="margin-top:8px;">This mode estimates row P/L from visible text on the page, so it is only as accurate as the page labels it can detect.</div>
-          <div class="rhph-actions">
-            <button class="rhph-btn" id="rhph-refresh-btn">Refresh</button>
-          </div>
-        </div>
-      </div>
-    `);
+      root.querySelector("#rhph-select-all").addEventListener("click", () => {
+        bulkSet(true).catch(console.error);
+      });
 
-    const btn = document.getElementById("rhph-refresh-btn");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        render().catch(console.error);
+      root.querySelector("#rhph-clear-all").addEventListener("click", () => {
+        bulkSet(false).catch(console.error);
+      });
+
+      root.querySelector("#rhph-refresh").addEventListener("click", () => {
+        refresh().catch(console.error);
       });
     }
+
+    return root;
   }
 
-  let renderTimer = null;
-  function scheduleRender() {
-    clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => render().catch(console.error), 300);
+  function getStockRows() {
+    return Array.from(document.querySelectorAll('a[href^="/stocks/"]')).filter((row) => {
+      const href = row.getAttribute("href") || "";
+      const text = row.innerText || "";
+
+      return /^\/stocks\/[A-Z.\-]+$/i.test(href) && text.includes("$");
+    });
   }
 
-  const observer = new MutationObserver(() => {
-    scheduleRender();
+  function rowKey(row) {
+    return row.getAttribute("href") || "";
+  }
+
+function getColumnIndexMap() {
+  const header = Array.from(document.querySelectorAll("header")).find((el) => {
+    const text = el.innerText || "";
+    return (
+      text.includes("Name") &&
+      text.includes("Symbol") &&
+      text.includes("Shares") &&
+      text.includes("Price") &&
+      text.includes("Average cost") &&
+      text.includes("Total return") &&
+      text.includes("Equity")
+    );
   });
 
-  function init() {
-    render().catch(console.error);
-    observer.observe(document.documentElement || document.body, {
+  if (!header) {
+    console.log("RH helper: header not found");
+    return null;
+  }
+
+  // Get direct header cell containers only
+  const cellNodes = Array.from(header.children).filter(
+    (el) => (el.innerText || "").trim().length > 0
+  );
+
+  const labels = cellNodes.map((el) => {
+    const text = (el.innerText || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text;
+  });
+
+  const indexMap = {
+    Name: labels.findIndex((t) => t === "Name"),
+    Symbol: labels.findIndex((t) => t === "Symbol"),
+    Shares: labels.findIndex((t) => t === "Shares"),
+    Price: labels.findIndex((t) => t === "Price"),
+    "Average cost": labels.findIndex((t) => t === "Average cost"),
+    "Total return": labels.findIndex((t) => t === "Total return"),
+    Equity: labels.findIndex((t) => t === "Equity")
+  };
+
+  console.log("RH helper header labels:", labels);
+  console.log("RH helper column map:", indexMap);
+
+  return indexMap;
+}
+
+function getRowData(row, columnMap) {
+  const href = row.getAttribute("href") || "";
+  const ticker = href.split("/stocks/")[1] || "UNKNOWN";
+
+  // Find the main row container that holds the 7 visible cells
+  const rowContainer = row.querySelector(".SOx4C3KwX4BlWxltBd5l-A--");
+  if (!rowContainer) {
+    console.log("RH helper: row container not found for", ticker);
+    return { ticker, totalReturn: NaN };
+  }
+
+  // Use direct child cells only
+  const cells = Array.from(rowContainer.children).filter(
+    (el) => (el.innerText || "").trim().length > 0
+  );
+
+  const totalReturnIndex = columnMap?.["Total return"];
+  let totalReturn = NaN;
+
+  if (
+    Number.isInteger(totalReturnIndex) &&
+    totalReturnIndex >= 0 &&
+    cells[totalReturnIndex]
+  ) {
+    const rawText = (cells[totalReturnIndex].innerText || "").trim();
+    totalReturn = parseMoney(rawText);
+
+    console.log("RH helper row:", {
+      ticker,
+      totalReturnIndex,
+      rawText,
+      parsed: totalReturn
+    });
+  } else {
+    console.log("RH helper: total return cell missing", {
+      ticker,
+      totalReturnIndex,
+      cellCount: cells.length
+    });
+  }
+
+  // Keep your old negative detection
+  const isDown = row.innerHTML.includes("1pvztri");
+  if (isDown && Number.isFinite(totalReturn)) {
+    totalReturn = -Math.abs(totalReturn);
+  }
+
+  return { ticker, totalReturn };
+}
+
+  async function getIncludeMap() {
+    const data = await chrome.storage.local.get({ [STORAGE_KEY]: {} });
+    return data[STORAGE_KEY] || {};
+  }
+
+  async function saveIncludeMap(map) {
+    await chrome.storage.local.set({ [STORAGE_KEY]: map });
+  }
+
+  async function attachCheckboxes() {
+    const rows = getStockRows();
+    const includeMap = await getIncludeMap();
+
+    for (const row of rows) {
+      if (row.querySelector(".rhph-checkbox-wrap")) continue;
+
+      const key = rowKey(row);
+
+      const wrap = document.createElement("div");
+      wrap.className = "rhph-checkbox-wrap";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "rhph-mini-checkbox";
+      cb.checked = includeMap[key] !== false;
+      cb.title = "Include/exclude from helper total";
+
+      // Stop the parent stock link from hijacking the interaction.
+      // Do not call preventDefault on the checkbox click itself,
+      // otherwise the checkbox may not toggle.
+      wrap.addEventListener(
+        "pointerdown",
+        (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation?.();
+        },
+        true
+      );
+
+      wrap.addEventListener(
+        "mousedown",
+        (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation?.();
+        },
+        true
+      );
+
+      wrap.addEventListener(
+        "mouseup",
+        (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation?.();
+        },
+        true
+      );
+
+      wrap.addEventListener(
+        "click",
+        (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation?.();
+        },
+        true
+      );
+
+      cb.addEventListener(
+        "click",
+        (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation?.();
+        },
+        true
+      );
+
+      cb.addEventListener("change", async (e) => {
+        e.stopPropagation();
+
+        const map = await getIncludeMap();
+        map[key] = cb.checked;
+        await saveIncludeMap(map);
+        await updateSummary();
+      });
+
+      wrap.appendChild(cb);
+
+      row.style.position = "relative";
+      row.prepend(wrap);
+    }
+  }
+
+async function updateSummary() {
+  ensureRoot();
+
+  const rows = getStockRows();
+  const includeMap = await getIncludeMap();
+  const columnMap = getColumnIndexMap();
+
+  let detected = 0;
+  let included = 0;
+  let total = 0;
+
+  for (const row of rows) {
+    detected += 1;
+
+    const key = rowKey(row);
+    const isIncluded = includeMap[key] !== false;
+
+    const cb = row.querySelector(".rhph-mini-checkbox");
+    if (cb) {
+      cb.checked = isIncluded;
+    }
+
+    if (isIncluded) {
+      included += 1;
+
+      const data = getRowData(row, columnMap);
+      if (Number.isFinite(data.totalReturn)) {
+        total += data.totalReturn;
+      }
+    }
+  }
+
+  const detectedEl = document.getElementById("rhph-detected");
+  const includedEl = document.getElementById("rhph-included");
+  const totalEl = document.getElementById("rhph-total");
+
+  if (detectedEl) detectedEl.textContent = String(detected);
+  if (includedEl) includedEl.textContent = String(included);
+
+  if (totalEl) {
+    totalEl.textContent = money(total);
+    totalEl.classList.remove("rhph-success", "rhph-danger");
+    totalEl.classList.add(total >= 0 ? "rhph-success" : "rhph-danger");
+  }
+}
+
+  async function bulkSet(value) {
+    const rows = getStockRows();
+    const map = await getIncludeMap();
+
+    for (const row of rows) {
+      map[rowKey(row)] = value;
+
+      const cb = row.querySelector(".rhph-mini-checkbox");
+      if (cb) {
+        cb.checked = value;
+      }
+    }
+
+    await saveIncludeMap(map);
+    await updateSummary();
+  }
+
+  async function refresh() {
+    await attachCheckboxes();
+    await updateSummary();
+  }
+
+  let refreshTimer = null;
+
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refresh().catch(console.error);
+    }, 400);
+  }
+
+  const observer = new MutationObserver((mutations) => {
+    const hasExternalChange = mutations.some((m) =>
+      [...m.addedNodes].some((node) => {
+        return (
+          node.nodeType === 1 &&
+          !node.closest?.(`#${ROOT_ID}`) &&
+          !(node.id === ROOT_ID) &&
+          !(node.classList?.contains("rhph-checkbox-wrap")) &&
+          !(node.classList?.contains("rhph-mini-checkbox"))
+        );
+      })
+    );
+
+    if (hasExternalChange) {
+      scheduleRefresh();
+    }
+  });
+
+  async function init() {
+    await refresh();
+
+    observer.observe(document.body, {
       childList: true,
       subtree: true
     });
